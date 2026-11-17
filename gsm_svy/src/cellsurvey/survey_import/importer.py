@@ -25,12 +25,14 @@ from cellsurvey.database.repositories.survey_repository import (
     SurveyRepository,
 )
 from cellsurvey.schema import Measurement, MeasurementMethod, SourceFormat
+from cellsurvey.survey_import.column_mapper import ambiguous_columns, suggest_mappings
 from cellsurvey.survey_import.csv_importer import read_csv
 from cellsurvey.survey_import.excel_importer import read_excel
 from cellsurvey.survey_import.file_detector import detect_format
 from cellsurvey.survey_import.geojson_importer import read_geojson
 from cellsurvey.survey_import.json_importer import read_json
 from cellsurvey.survey_import.pdf_importer import read_pdf
+from cellsurvey.survey_import.privacy import quarantine_columns
 from cellsurvey.survey_import.source import (
     Extraction,
     SourceFile,
@@ -109,6 +111,12 @@ class PreparedImport:
     """The records that would be stored."""
     content_hashes: tuple[str | None, ...]
     findings: tuple[Finding, ...]
+    valid: int = 0
+    valid_with_warnings: int = 0
+    invalid: int = 0
+    duplicates_in_file: int = 0
+    duplicates_in_database: int = 0
+    quarantined_columns: tuple[str, ...] = ()
 
     @property
     def rows_read(self) -> int:
@@ -161,21 +169,55 @@ class SurveyImporter:
             source_software=source_software or None,
         )
         collector = FindingCollector()
+        quarantined = quarantine_columns(table.columns)
+        if quarantined:
+            collector.add(
+                Severity.WARNING,
+                "quarantined_columns",
+                "Personal or subscriber identifier columns were detected and will not be stored: "
+                + ", ".join(quarantined),
+            )
+        ambiguous = ambiguous_columns(table.columns)
+        if ambiguous:
+            collector.add(
+                Severity.WARNING,
+                "ambiguous_columns",
+                "These columns were not auto-mapped because their meaning is ambiguous "
+                "(for example channel could be ARFCN, UARFCN or EARFCN). Map them manually "
+                "only if you know the technology: "
+                + ", ".join(ambiguous),
+            )
+        low = [
+            f"{item.column} → {item.field} ({item.confidence:.0%})"
+            for item in suggest_mappings(table.columns)
+            if item.confidence < 0.7 and mapping.get(item.field) == item.column
+        ]
+        if low:
+            collector.add(
+                Severity.WARNING,
+                "low_confidence_mapping",
+                "Review these low-confidence automatic mappings: " + "; ".join(low),
+            )
+
         try:
             normalized = normalize_table(table, mapping, options, provenance, collector)
         except ValueError as exc:
             raise SurveyImportError(str(exc)) from exc
 
-        unmapped = [column for column in table.columns if column not in mapping.values()]
+        unmapped = [
+            column
+            for column in table.columns
+            if column not in mapping.values() and column not in quarantined
+        ]
         if unmapped:
             collector.add(
                 Severity.INFO,
                 "unmapped_columns",
-                f"Not mapped to a field: {', '.join(unmapped)}. The values are kept with each "
-                "record as original source values but are not available for analysis.",
+                f"Not mapped to a field: {', '.join(unmapped)}. Non-personal values are kept "
+                "with each record as original source values but are not available for analysis.",
             )
 
-        records, hashes, duplicates = split_duplicates(normalized)
+        records, hashes, duplicates = split_duplicates(normalized.records)
         for duplicate in duplicates:
             collector.add(
                 Severity.WARNING,
@@ -186,8 +228,10 @@ class SurveyImporter:
         stored = self._repository.existing_content_hashes(
             [digest for digest in hashes if digest is not None]
         )
+        database_duplicates = 0
         for record, digest in zip(records, hashes):
             if digest in stored:
+                database_duplicates += 1
                 collector.add(
                     Severity.WARNING,
                     "duplicate_in_database",
@@ -206,6 +250,12 @@ class SurveyImporter:
             records=tuple(record for record, _ in new),
             content_hashes=tuple(digest for _, digest in new),
             findings=tuple(collector.findings()),
+            valid=normalized.valid,
+            valid_with_warnings=normalized.valid_with_warnings,
+            invalid=normalized.invalid,
+            duplicates_in_file=len(duplicates),
+            duplicates_in_database=database_duplicates,
+            quarantined_columns=quarantined,
         )
 
     def commit(self, prepared: PreparedImport, survey_name: str, notes: str | None = None) -> int:

@@ -101,6 +101,8 @@ class MeasurementRecord(Base):
         Index("ix_measurement_records_survey_technology", "survey_id", "technology"),
         Index("ix_measurement_records_survey_country", "survey_id", "country"),
         Index("ix_measurement_records_survey_operator", "survey_id", "operator"),
+        Index("ix_measurement_records_survey_mcc", "survey_id", "mcc"),
+        Index("ix_measurement_records_survey_mnc", "survey_id", "mnc"),
         Index("ix_measurement_records_import_row", "import_id", "source_row"),
     )
 
@@ -113,6 +115,7 @@ class MeasurementRecord(Base):
     content_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
     """Fingerprint used to refuse duplicates; null for records without a timestamp."""
     measurement_method: Mapped[str | None] = mapped_column(String(32))
+    validation_status: Mapped[str | None] = mapped_column(String(32))
     source_row: Mapped[int | None] = mapped_column(Integer)
     source_values: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
@@ -122,6 +125,9 @@ class MeasurementRecord(Base):
     operator: Mapped[str | None] = mapped_column(Text)
     mcc: Mapped[str | None] = mapped_column(String(3))
     mnc: Mapped[str | None] = mapped_column(String(3))
+    plmn: Mapped[str | None] = mapped_column(String(8))
+    band: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
 
     cell_id: Mapped[int | None] = mapped_column(Integer)
     lac: Mapped[int | None] = mapped_column(Integer)
@@ -144,4 +150,5 @@ class MeasurementRecord(Base):
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
     altitude_m: Mapped[float | None] = mapped_column(Float)
+    position_accuracy_m: Mapped[float | None] = mapped_column(Float)
     coordinate_reference_system: Mapped[str | None] = mapped_column(String(32))

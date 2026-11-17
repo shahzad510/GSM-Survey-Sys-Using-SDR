@@ -119,8 +119,17 @@ class SurveyExplorerPage(BasePage):
         self._technology = QComboBox()
         self._country = QComboBox()
         self._operator = QComboBox()
+        self._mcc = QComboBox()
+        self._mnc = QComboBox()
         self._instrument = QComboBox()
-        for box in (self._technology, self._country, self._operator, self._instrument):
+        for box in (
+            self._technology,
+            self._country,
+            self._operator,
+            self._mcc,
+            self._mnc,
+            self._instrument,
+        ):
             box.currentIndexChanged.connect(self._apply_filters)
         form.addRow("Survey name", self._name)
         dates = QHBoxLayout()
@@ -133,6 +142,8 @@ class SurveyExplorerPage(BasePage):
         form.addRow("Technology", self._technology)
         form.addRow("Country", self._country)
         form.addRow("Operator", self._operator)
+        form.addRow("MCC", self._mcc)
+        form.addRow("MNC", self._mnc)
         form.addRow("Instrument", self._instrument)
         return form
 
@@ -166,6 +177,8 @@ class SurveyExplorerPage(BasePage):
         refill(self._technology, {value for s in self._summaries for value in s.technologies})
         refill(self._country, {value for s in self._summaries for value in s.countries})
         refill(self._operator, {value for s in self._summaries for value in s.operators})
+        refill(self._mcc, {value for s in self._summaries for value in s.mccs})
+        refill(self._mnc, {value for s in self._summaries for value in s.mncs})
         refill(self._instrument, {value for s in self._summaries for value in s.instruments})
 
     def _apply_filters(self) -> None:

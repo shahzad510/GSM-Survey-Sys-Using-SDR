@@ -87,6 +87,8 @@ class SurveySummary:
     technologies: tuple[str, ...]
     countries: tuple[str, ...]
     operators: tuple[str, ...]
+    mccs: tuple[str, ...]
+    mncs: tuple[str, ...]
     instruments: tuple[str, ...]
     source_files: tuple[str, ...]
 
@@ -101,6 +103,8 @@ class SurveyFilter:
     technology: str | None = None
     country: str | None = None
     operator: str | None = None
+    mcc: str | None = None
+    mnc: str | None = None
     instrument: str | None = None
 
     def matches(self, survey: SurveySummary) -> bool:
@@ -124,6 +128,8 @@ class SurveyFilter:
                 (self.technology, survey.technologies),
                 (self.country, survey.countries),
                 (self.operator, survey.operators),
+                (self.mcc, survey.mccs),
+                (self.mnc, survey.mncs),
                 (self.instrument, survey.instruments),
             )
         )
@@ -281,6 +287,8 @@ class SurveyRepository:
             technologies = _distinct_per_survey(session, MeasurementRecord.technology)
             countries = _distinct_per_survey(session, MeasurementRecord.country)
             operators = _distinct_per_survey(session, MeasurementRecord.operator)
+            mccs = _distinct_per_survey(session, MeasurementRecord.mcc)
+            mncs = _distinct_per_survey(session, MeasurementRecord.mnc)
             instruments: defaultdict[int, set[str]] = defaultdict(set)
             files: defaultdict[int, set[str]] = defaultdict(set)
             for survey_id, instrument, filename in session.execute(
@@ -304,6 +312,8 @@ class SurveyRepository:
                     technologies=tuple(sorted(technologies[survey.id])),
                     countries=tuple(sorted(countries[survey.id])),
                     operators=tuple(sorted(operators[survey.id])),
+                    mccs=tuple(sorted(mccs[survey.id])),
+                    mncs=tuple(sorted(mncs[survey.id])),
                     instruments=tuple(sorted(instruments[survey.id])),
                     source_files=tuple(sorted(files[survey.id])),
                 )

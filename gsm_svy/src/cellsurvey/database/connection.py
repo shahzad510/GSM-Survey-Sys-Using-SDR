@@ -6,7 +6,7 @@ import logging
 from contextlib import AbstractContextManager
 from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import Connection, create_engine, event, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,9 +14,17 @@ from cellsurvey.database.models import Base
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 """Stored in SQLite's ``user_version``. Increase it with every schema change
-and add the migration to :meth:`Database.create_schema`."""
+and add the migration below."""
+
+_V2_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("validation_status", "VARCHAR(32)"),
+    ("plmn", "VARCHAR(8)"),
+    ("band", "TEXT"),
+    ("notes", "TEXT"),
+    ("position_accuracy_m", "FLOAT"),
+)
 
 
 class DatabaseError(Exception):
@@ -67,10 +75,27 @@ class Database:
                     f"application (schema {version}; this version supports {SCHEMA_VERSION})."
                 )
             Base.metadata.create_all(connection)
+            if version < 2:
+                _migrate_to_v2(connection)
             connection.exec_driver_sql(f"PRAGMA user_version = {SCHEMA_VERSION}")
         logger.info(
             "Database opened", extra={"path": str(self.path), "schema_version": SCHEMA_VERSION}
         )
+
+
+def _migrate_to_v2(connection: Connection) -> None:
+    """Add quality and identity columns introduced for survey-import enhancements."""
+    existing = {
+        row[1]
+        for row in connection.exec_driver_sql("PRAGMA table_info(measurement_records)").all()
+    }
+    if not existing:
+        return
+    for name, sql_type in _V2_COLUMNS:
+        if name not in existing:
+            connection.execute(
+                text(f"ALTER TABLE measurement_records ADD COLUMN {name} {sql_type}")
+            )
 
 
 def _enable_foreign_keys(dbapi_connection: object, _record: object) -> None:
