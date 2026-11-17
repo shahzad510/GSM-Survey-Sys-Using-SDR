@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cellsurvey"
+description = "Cellular Survey System (CSS): passive cellular RF survey and measurement analysis."
+readme = "README.md"
+requires-python = ">=3.12"
+dynamic = ["version"]
+dependencies = [
+    # Desktop interface
+    "PySide6>=6.6",
+    # Visualization
+    "pyqtgraph>=0.13.7",
+    "matplotlib>=3.8",
+    "folium>=0.15",
+    # Scientific computing
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pandas>=2.1",
+    # Database
+    "SQLAlchemy>=2.0",
+    # Data validation
+    "pydantic>=2.5",
+    # Survey file import and export
+    "openpyxl>=3.1",
+    "xlrd>=2.0",
+    "PyMuPDF>=1.24",
+]
+# SDR dependencies (SoapySDR, GNU Radio, UHD) are intentionally absent until Milestone 7.
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.gui-scripts]
+cellsurvey = "cellsurvey.app:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "cellsurvey.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
